@@ -14,6 +14,29 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### 2026-05-24 Route OpenCode Images Through Gemini Vision
+
+Goal: keep DeepSeek V4 Pro as the OpenCode orchestrator while routing screenshots/images to the Gemini screenshot subagent for visual extraction.
+
+Execution order:
+
+- [x] Set OpenCode's primary model back to DeepSeek in root and `.opencode` configs.
+- [x] Keep Gemini as the dedicated screenshot/image subagent.
+- [x] Add explicit orchestration instructions so image inputs are extracted by the subagent before DeepSeek makes the final decision.
+- [x] Add a pre-model vision router hook so DeepSeek image turns are routed to Gemini before the provider rejects attachments.
+- [x] Smoke-check JSON/config syntax and verify an attached PNG routes to Gemini instead of failing on DeepSeek image input.
+
+### 2026-05-24 Add Gemini Vision To OpenCode Orchestrator
+
+Goal: add Google Gemini API as an image-capable OpenCode provider and route image/orchestrator workers through it without storing secrets in tracked files.
+
+Execution order:
+
+- [x] Add a Gemini provider/model to root and `.opencode` OpenCode configs.
+- [x] Add a Gemini-capable Weave worker mapping for image-heavy agents.
+- [x] Install local provider dependency and set the API key in the user environment.
+- [x] Smoke-check config/dependency loading and Gemini model availability without storing secrets in tracked files.
+
 ### 2026-05-24 Configure Global OpenCode Slim Orchestration
 
 Goal: align the user's global OpenCode config with the provided slim specialist orchestration.

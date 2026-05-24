@@ -1,6 +1,54 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "provider": {
+    "google": {
+      "npm": "@ai-sdk/google",
+      "name": "Google Gemini",
+      "options": {
+        "apiKey": "{env:GOOGLE_GENERATIVE_AI_API_KEY}",
+        "timeout": 600000,
+        "chunkTimeout": 60000
+      },
+      "models": {
+        "gemini-2.5-flash": {
+          "name": "Gemini 2.5 Flash Vision",
+          "attachment": true,
+          "reasoning": true,
+          "tool_call": true,
+          "limit": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modalities": {
+            "input": ["text", "image", "pdf"],
+            "output": ["text"]
+          }
+        }
+      }
+    },
+    "gateway": {
+      "npm": "@ai-sdk/openai",
+      "name": "Local Gateway",
+      "options": {
+        "apiKey": "sk-local",
+        "baseURL": "http://192.168.3.63:3999/v1"
+      },
+      "models": {
+        "gpt-4o": {
+          "name": "GPT-4o (Gateway)",
+          "attachment": true,
+          "tool_call": true,
+          "limit": {
+            "context": 128000,
+            "output": 16384
+          },
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          }
+        }
+      }
+    },
     "openai": {
       "npm": "@ai-sdk/openai",
       "name": "OpenAI",
@@ -49,8 +97,28 @@
       }
     }
   },
-  "model": "opencode/gpt-5.4-mini",
-  "small_model": "deepseek/deepseek-chat",
+  "model": "deepseek/deepseek-v4-pro",
+  "small_model": "deepseek/deepseek-v4-pro",
+  "default_agent": "build",
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "model": "deepseek/deepseek-v4-pro",
+      "prompt": "You are the primary OpenCode orchestrator. Follow AGENTS.md and the local project instructions before making decisions. If the user provides an image, screenshot, UI mockup, diagram, photo, or other visual attachment, do not try to analyze it yourself and do not ask the user to transcribe it first. Invoke the screenshot subagent to extract visible text, UI details, layout, errors, and any relevant visual evidence. Use that extraction as evidence, then make the final engineering decision yourself according to AGENTS.md, local instructions, and the user's request.",
+      "permission": {
+        "task": {
+          "*": "allow",
+          "screenshot": "allow"
+        }
+      }
+    },
+    "screenshot": {
+      "description": "Screenshot and image analysis. Use when the user provides screenshots, UI mockups, diagrams, photos, visual attachments, or asks for OCR, visual extraction, layout analysis, image comparison, or visible error reading.",
+      "mode": "subagent",
+      "model": "google/gemini-2.5-flash",
+      "prompt": "You are a screenshot and image analysis specialist. Extract visible text exactly, describe UI layout and visual hierarchy, identify visible errors or anomalies, compare screenshots when needed, and return concise evidence for the primary DeepSeek orchestrator. Do not make the final project decision unless explicitly asked; provide the visual facts the orchestrator needs."
+    }
+  },
   "attachment": {
     "image": {
       "auto_resize": true,
@@ -59,5 +127,8 @@
       "max_base64_bytes": 5242880
     }
   },
-  "plugin": ["@opencode_weave/weave"]
+  "plugin": [
+    "file:///D:/AI/open_code_plugins/.opencode/plugins/vision-router.js",
+    "@opencode_weave/weave"
+  ]
 }
