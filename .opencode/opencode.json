@@ -1,0 +1,88 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "gateway": {
+      "npm": "@ai-sdk/openai",
+      "name": "Local Gateway",
+      "options": {
+        "apiKey": "sk-local",
+        "baseURL": "http://192.168.3.63:3999/v1"
+      },
+      "models": {
+        "gpt-4o": {
+          "name": "GPT-4o (Gateway)",
+          "attachment": true,
+          "tool_call": true,
+          "limit": {
+            "context": 128000,
+            "output": 16384
+          },
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          }
+        }
+      }
+    },
+    "openai": {
+      "npm": "@ai-sdk/openai",
+      "name": "OpenAI",
+      "options": {
+        "apiKey": "{env:OPENAI_API_KEY}",
+        "timeout": 600000,
+        "chunkTimeout": 60000
+      },
+      "models": {
+        "gpt-5.4-mini": {
+          "name": "GPT-5.4 Mini Vision",
+          "attachment": true,
+          "reasoning": true,
+          "tool_call": true,
+          "limit": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": ["text", "image", "pdf"],
+            "output": ["text"]
+          },
+          "options": {
+            "reasoningEffort": "medium",
+            "textVerbosity": "low"
+          }
+        },
+        "gpt-5.4-nano": {
+          "name": "GPT-5.4 Nano Vision",
+          "attachment": true,
+          "reasoning": true,
+          "tool_call": true,
+          "limit": {
+            "context": 400000,
+            "output": 128000
+          },
+          "modalities": {
+            "input": ["text", "image", "pdf"],
+            "output": ["text"]
+          },
+          "options": {
+            "reasoningEffort": "low",
+            "textVerbosity": "low"
+          }
+        }
+      }
+    }
+  },
+  "model": "gateway/gpt-4o",
+  "small_model": "deepseek/deepseek-chat",
+  "attachment": {
+    "image": {
+      "auto_resize": true,
+      "max_width": 2000,
+      "max_height": 2000,
+      "max_base64_bytes": 5242880
+    }
+  },
+  "plugin": [
+    "@opencode_weave/weave"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://raw.githubusercontent.com/pgermishuys/opencode-weave/v0.8.0/schema/weave-config.schema.json",
+  "agents": {
+    "loom": { "model": "opencode/gpt-5.4-mini" },
+    "tapestry": { "model": "opencode/gpt-5.4-mini" },
+    "shuttle": { "model": "deepseek/deepseek-chat" },
+    "pattern": { "model": "opencode/gpt-5.4-mini" },
+    "thread": { "model": "deepseek/deepseek-chat" },
+    "spindle": { "model": "deepseek/deepseek-chat" },
+    "weft": { "model": "opencode/gpt-5.4-mini" },
+    "warp": { "model": "opencode/gpt-5.4-mini" }
+  },
+  "background": {
+    "defaultConcurrency": 2
+  },
+  "continuation": {
+    "recovery": {
+      "compaction": true
+    },
+    "idle": {
+      "enabled": true,
+      "work": true,
+      "workflow": true,
+      "todo_prompt": true
+    }
+  }
+}
