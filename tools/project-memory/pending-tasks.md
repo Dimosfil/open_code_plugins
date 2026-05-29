@@ -14,6 +14,34 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### 2026-05-29 Add LM Studio Vision Fallback
+
+Goal: add the local LM Studio vision model as a fallback in the image-analysis
+chain so screenshots can still be processed when cloud vision providers hit
+quota or fail.
+
+Execution order:
+
+- [x] Add/update the local task checklist before editing code.
+- [x] Add an OpenAI-compatible LM Studio vision call for `qwen/qwen3.5-9b`.
+- [x] Insert LM Studio after Gemini and before OpenRouter Nemotron in the
+      fallback chain.
+- [x] Sync project/native plugin copies and run syntax/smoke checks.
+
+### 2026-05-29 Switch OpenCode Vision Primary To Gemini
+
+Goal: keep DeepSeek as the working text LLM while routing image analysis through
+direct Gemini first, with OpenRouter Nemotron retained as fallback.
+
+Execution order:
+
+- [x] Add/update the local task checklist before editing code.
+- [x] Point the visible OpenCode image-capable model at Gemini instead of
+      OpenRouter Nemotron.
+- [x] Teach `vision-router.js` to call Gemini vision first and fall back to
+      OpenRouter Nemotron on Gemini failure.
+- [x] Sync project/native config/plugin copies and run syntax/smoke checks.
+
 ### 2026-05-29 Fix OpenCode Vision Context Leakage
 
 Goal: stop pasted/image-only turns from either being rejected as unsupported or

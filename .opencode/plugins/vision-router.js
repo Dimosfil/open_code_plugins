@@ -36,7 +36,11 @@ const OPENROUTER_NEMOTRON_MODEL = {
   modelID: "nvidia/nemotron-nano-12b-v2-vl:free",
 }
 
-const IMAGE_MODEL = OPENROUTER_NEMOTRON_MODEL
+const IMAGE_MODEL = GEMINI_MODEL
+const GEMINI_GENERATE_CONTENT_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+const LMSTUDIO_BASE_URL = (process.env.LMSTUDIO_BASE_URL || "http://10.0.236.10:1234/v1").replace(/\/+$/, "")
+const LMSTUDIO_CHAT_COMPLETIONS_ENDPOINT = `${LMSTUDIO_BASE_URL}/chat/completions`
+const LMSTUDIO_VISION_MODEL = process.env.LMSTUDIO_VISION_MODEL || "qwen/qwen3.5-9b"
 const OPENROUTER_CHAT_COMPLETIONS_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 const DEFAULT_IMAGE_PROMPT = "Analyze the attached image. Extract visible text, UI errors, layout details, and important visual facts."
 const VISION_EVIDENCE_HEADER = "Extracted facts from the attached image for this turn."
@@ -250,6 +254,8 @@ function extractText(value) {
     if (typeof value.text === "string") return value.text
     if (typeof value.content === "string") return value.content
     if (Array.isArray(value.content)) return extractText(value.content)
+    if (Array.isArray(value.parts)) return extractText(value.parts)
+    if (Array.isArray(value.candidates)) return extractText(value.candidates.map((candidate) => candidate?.content))
     if (Array.isArray(value.choices)) return extractText(value.choices.map((choice) => choice?.message || choice?.delta))
   }
 
@@ -274,6 +280,8 @@ function makeInternalVisionContext(analysis, userText) {
 function sanitizeFailure(error) {
   return String(error?.message || error || "Unknown vision routing failure")
     .replace(/Bearer\s+[^\s"]+/gi, "Bearer [redacted]")
+    .replace(/GOOGLE_GENERATIVE_AI_API_KEY=[^\s"]+/gi, "GOOGLE_GENERATIVE_AI_API_KEY=[redacted]")
+    .replace(/LMSTUDIO_API_KEY=[^\s"]+/gi, "LMSTUDIO_API_KEY=[redacted]")
     .replace(/OPENROUTER_API_KEY=[^\s"]+/gi, "OPENROUTER_API_KEY=[redacted]")
 }
 
@@ -329,6 +337,123 @@ async function callOpenRouterVision(parts, model = OPENROUTER_NEMOTRON_MODEL) {
 
   const analysis = extractAssistantText(body)
   if (!analysis) throw new Error("OpenRouter vision request returned empty analysis")
+  return { analysis, userText }
+}
+
+async function callOpenAICompatibleVision({ parts, endpoint, modelID, apiKey, providerName }) {
+  const userText = getText(parts)
+  const content = [
+    { type: "text", text: userText || DEFAULT_IMAGE_PROMPT },
+  ]
+
+  for (const image of parts.filter(isImagePart)) {
+    content.push({
+      type: "image_url",
+      image_url: {
+        url: await partToImageUrl(image),
+      },
+    })
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+  }
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    signal: AbortSignal.timeout(120000),
+    headers,
+    body: JSON.stringify({
+      model: modelID,
+      messages: [{ role: "user", content }],
+      max_tokens: 1200,
+    }),
+  })
+
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const detail = body?.error?.message || body?.message || response.statusText
+    throw new Error(`${providerName} vision request failed: ${detail}`)
+  }
+
+  const analysis = extractAssistantText(body)
+  if (!analysis) throw new Error(`${providerName} vision request returned empty analysis`)
+  return { analysis, userText }
+}
+
+async function callLMStudioVision(parts) {
+  return callOpenAICompatibleVision({
+    parts,
+    endpoint: LMSTUDIO_CHAT_COMPLETIONS_ENDPOINT,
+    modelID: LMSTUDIO_VISION_MODEL,
+    apiKey: process.env.LMSTUDIO_API_KEY,
+    providerName: "LM Studio",
+  })
+}
+
+async function partToGeminiInlineData(part) {
+  const url = await partToImageUrl(part)
+  const dataUrlMatch = /^data:([^;,]+)?(?:;[^,]*)?;base64,(.*)$/i.exec(url)
+  if (dataUrlMatch) {
+    return {
+      inline_data: {
+        mime_type: dataUrlMatch[1] || getPartMime(part) || "image/png",
+        data: dataUrlMatch[2],
+      },
+    }
+  }
+
+  const response = await fetch(url, { signal: AbortSignal.timeout(120000) })
+  if (!response.ok) {
+    throw new Error(`Gemini vision image fetch failed: ${response.status} ${response.statusText}`)
+  }
+  const mime = response.headers.get("content-type") || getPartMime(part) || "image/png"
+  const buffer = Buffer.from(await response.arrayBuffer())
+  return {
+    inline_data: {
+      mime_type: mime,
+      data: buffer.toString("base64"),
+    },
+  }
+}
+
+async function callGeminiVision(parts) {
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error("GOOGLE_GENERATIVE_AI_API_KEY or GEMINI_API_KEY is not set")
+
+  const userText = getText(parts)
+  const requestParts = [
+    { text: userText || DEFAULT_IMAGE_PROMPT },
+  ]
+
+  for (const image of parts.filter(isImagePart)) {
+    requestParts.push(await partToGeminiInlineData(image))
+  }
+
+  const response = await fetch(GEMINI_GENERATE_CONTENT_ENDPOINT, {
+    method: "POST",
+    signal: AbortSignal.timeout(120000),
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: requestParts }],
+      generationConfig: {
+        maxOutputTokens: 1200,
+      },
+    }),
+  })
+
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const detail = body?.error?.message || body?.message || response.statusText
+    throw new Error(`Gemini vision request failed: ${detail}`)
+  }
+
+  const analysis = extractAssistantText(body)
+  if (!analysis) throw new Error("Gemini vision request returned empty analysis")
   return { analysis, userText }
 }
 
@@ -441,17 +566,46 @@ function ensureTextPart(input, output, visualKind, messageParts = getMessagePart
 
 async function analyzeImagePartsToTextPart(parts) {
   try {
-    const { analysis, userText } = await callOpenRouterVision(parts, OPENROUTER_NEMOTRON_MODEL)
+    const { analysis, userText } = await callGeminiVision(parts)
     return {
       type: "text",
       text: makeInternalVisionContext(analysis, userText),
     }
-  } catch (error) {
-    return {
-      type: "text",
-      text: makeVisionFailureContext(error, getText(parts)),
+  } catch (geminiError) {
+    try {
+      const { analysis, userText } = await callLMStudioVision(parts)
+      return {
+        type: "text",
+        text: makeInternalVisionContext(analysis, userText),
+      }
+    } catch (lmStudioError) {
+      try {
+        const { analysis, userText } = await callOpenRouterVision(parts, OPENROUTER_NEMOTRON_MODEL)
+        return {
+          type: "text",
+          text: makeInternalVisionContext(analysis, userText),
+        }
+      } catch (openRouterError) {
+        const error = new Error([
+          `Gemini primary failed: ${sanitizeFailure(geminiError)}`,
+          `LM Studio fallback failed: ${sanitizeFailure(lmStudioError)}`,
+          `OpenRouter fallback failed: ${sanitizeFailure(openRouterError)}`,
+        ].join(" | "))
+        return {
+          type: "text",
+          text: makeVisionFailureContext(error, getText(parts)),
+        }
+      }
     }
   }
+}
+
+function shouldAnalyzeImageToText(model) {
+  return (
+    modelMatches(model, IMAGE_MODEL) ||
+    modelMatches(model, GEMINI_MODEL) ||
+    modelMatches(model, OPENROUTER_NEMOTRON_MODEL)
+  )
 }
 
 export const VisionRouter = async () => {
@@ -489,11 +643,11 @@ export const VisionRouter = async () => {
       }
 
       const selectedVisionModel = getSelectedVisionModel(currentModel, input.agent, visualKind)
-      const openRouterImageTarget = visualKind === "image" && (
-        (selectedVisionModel && modelMatches(selectedVisionModel, OPENROUTER_NEMOTRON_MODEL)) ||
-        modelMatches(currentModel, OPENROUTER_NEMOTRON_MODEL)
+      const imageTextAnalysisTarget = visualKind === "image" && (
+        (selectedVisionModel && shouldAnalyzeImageToText(selectedVisionModel)) ||
+        shouldAnalyzeImageToText(currentModel)
       )
-      if (openRouterImageTarget) {
+      if (imageTextAnalysisTarget) {
         setAllMessageParts(input, output, [await analyzeImagePartsToTextPart(messageParts)])
         setMessageModel(input, output, PRIMARY_TEXT_MODEL)
         return
@@ -510,7 +664,7 @@ export const VisionRouter = async () => {
 
       ensureTextPart(input, output, visualKind, messageParts)
       const targetModel = selectedVisionModel || (visualKind === "image" ? IMAGE_MODEL : PDF_MODEL)
-      if (visualKind === "image" && modelMatches(targetModel, OPENROUTER_NEMOTRON_MODEL)) {
+      if (visualKind === "image" && shouldAnalyzeImageToText(targetModel)) {
         setAllMessageParts(input, output, [await analyzeImagePartsToTextPart(messageParts)])
         setMessageModel(input, output, PRIMARY_TEXT_MODEL)
         return

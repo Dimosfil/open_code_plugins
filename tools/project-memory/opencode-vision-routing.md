@@ -105,6 +105,18 @@ Sixth update on 2026-05-29:
 
 Operational notes:
 
+- Update on 2026-05-29: the visible Desktop image-capable model is now
+  `google/gemini-2.5-flash`, but text-only `loom` turns are still reset to
+  `deepseek/deepseek-v4-pro` by `vision-router.js`.
+- Image turns are converted to text evidence before the final DeepSeek call:
+  the router calls Gemini vision first, then falls back to local LM Studio
+  `qwen/qwen3.5-9b` via OpenAI-compatible `/v1/chat/completions`, then falls
+  back to `openrouter/nvidia/nemotron-nano-12b-v2-vl:free`.
+- If Gemini, LM Studio, and OpenRouter all fail, the router sends DeepSeek a
+  sanitized diagnostic text part instead of the raw image.
+- Local LM Studio defaults are `LMSTUDIO_BASE_URL=http://10.0.236.10:1234/v1`
+  and `LMSTUDIO_VISION_MODEL=qwen/qwen3.5-9b`; override these environment
+  variables if the LAN address or loaded model changes.
 - `OPENROUTER_API_KEY` must be visible to the running OpenCode Desktop process
   before selecting `vision/openrouter-free` or `vision/nemotron`.
 - `ANTHROPIC_API_KEY` must be visible to the running OpenCode Desktop process

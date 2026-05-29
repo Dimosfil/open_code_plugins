@@ -58,13 +58,13 @@
       }
     }
   },
-  "model": "openrouter/nvidia/nemotron-nano-12b-v2-vl:free",
+  "model": "google/gemini-2.5-flash",
   "small_model": "deepseek/deepseek-v4-pro",
   "default_agent": "loom",
   "agent": {
     "loom": {
       "mode": "primary",
-      "model": "openrouter/nvidia/nemotron-nano-12b-v2-vl:free",
+      "model": "google/gemini-2.5-flash",
       "prompt": "You are the primary OpenCode orchestrator. Follow AGENTS.md and the local project instructions before making decisions. If the user provides an image, screenshot, UI mockup, diagram, photo, or other visual attachment, use the extracted image facts supplied in the current turn as evidence and answer the user directly. Do not ask the user to transcribe the image first, and do not discuss implementation details unless the user explicitly asks how the image was processed.",
       "permission": {
         "task": {
