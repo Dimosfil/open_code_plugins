@@ -1,5 +1,6 @@
 param(
     [int]$MaxLines = 80,
+    [switch]$ConfigureProjectLanguage,
     [switch]$ConfigureGitCommitLanguages,
     [switch]$ConfigureSystemLanguage
 )
@@ -192,7 +193,18 @@ function Write-SystemLanguagePreferenceNotice {
         $preferences = Get-Content -LiteralPath $systemPreferencesPath -Raw | ConvertFrom-Json
         $mode = [string]$preferences.agent_response_language.mode
         $language = [string]$preferences.agent_response_language.language
-        if ($mode -eq "fixed" -and $language) {
+        $languages = @($preferences.agent_response_language.project_environment_languages | ForEach-Object { [string]$_ })
+        if ($languages.Count -eq 0) {
+            $languages = @($preferences.agent_response_language.languages | ForEach-Object { [string]$_ })
+        }
+        $taskLanguages = @($preferences.agent_response_language.task_languages | ForEach-Object { [string]$_ })
+        if ($mode -eq "fixed" -and $languages.Count -gt 0) {
+            Write-Host ("Project working environment: {0}" -f ($languages -join ", "))
+            if ($taskLanguages.Count -gt 0) {
+                Write-Host ("Tasks: {0}" -f ($taskLanguages -join ", "))
+            }
+        }
+        elseif ($mode -eq "fixed" -and $language) {
             Write-Host "Agent working language: $language"
         }
         else {
@@ -207,7 +219,25 @@ function Write-SystemLanguagePreferenceNotice {
     }
 }
 
+function Invoke-ProjectLanguageSelector {
+    $selectorPath = "tools/select-project-language.ps1"
+    if (Test-Path -LiteralPath $selectorPath) {
+        & $selectorPath
+        return $true
+    }
+
+    Write-Host "Could not find $selectorPath."
+    Write-Host "Copy it from templates/select-project-language.template.ps1."
+    return $false
+}
+
 Write-InstructionKitUpdateNotice
+
+if ($ConfigureProjectLanguage) {
+    Write-Host ""
+    Write-Host "== Project Language =="
+    [void](Invoke-ProjectLanguageSelector)
+}
 
 Write-SmallFile -Path "AGENTS.md" -Title "AGENTS.md"
 Write-SmallFile -Path "tools/AGENT_WORKING_AGREEMENTS.md" -Title "Working Agreements"
@@ -261,6 +291,14 @@ if (Test-Path -LiteralPath "tools/project-memory/index_project.py") {
     Write-Host "== Project Memory =="
     Write-Host "Search memory with:"
     Write-Host "python .\tools\project-memory\index_project.py search `"query`" --limit 10"
+}
+
+if (Test-Path -LiteralPath "tools/project-memory/build_project_memory_index.py") {
+    Write-Host ""
+    Write-Host "== Project Memory SQLite =="
+    Write-Host "Rebuild/search memory with:"
+    Write-Host "python .\tools\project-memory\build_project_memory_index.py rebuild"
+    Write-Host "python .\tools\project-memory\build_project_memory_index.py search `"query`" --limit 10"
 }
 
 Write-Host ""

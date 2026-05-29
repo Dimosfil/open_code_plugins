@@ -115,6 +115,13 @@ Inspect logs:
 - Do not revert user changes unless explicitly requested.
 - Treat dirty worktrees as normal.
 - Keep changes scoped to the current task.
+- Preserve text encodings when editing files. On Windows, do not rewrite source
+  files with PowerShell pipelines such as `Get-Content ... | Set-Content ...`
+  unless both read and write encodings are explicit and known correct. Prefer
+  `apply_patch`, editor-native saves, or language APIs that read and write the
+  file with an explicit encoding such as UTF-8. If non-ASCII text appears as
+  mojibake after a command, stop, restore the last clean file version, and
+  reapply only the intended small patch.
 - Ask before destructive operations, broad refactors, or unrelated scope
   expansion.
 - Treat this project root as the filesystem boundary for normal work. Do not
@@ -122,13 +129,41 @@ Inspect logs:
   or arbitrary external folder unless the user gives an explicit concrete path
   and action. Use APIs, connectors, or task-manager endpoints for cross-project
   communication.
-- Treat `gi config`, `gi конфиг`, and `ги конфиг` as requests to get the
-  bootstrap config for the config/discovery service. Read a project-local
-  override only if local instructions define one, then read GI main config from
+- Treat `gi config`, `gi конфиг`, `ги конфиг`, `gi config service`,
+  `ги конфиг сервис`, `ги конфиг сервис url=<url>`, and
+  `ги конфиг сервис урл=<url>` as requests to get or set the bootstrap config
+  for the config/discovery service. Read a project-local override only if local
+  instructions define one, then read GI main config from
   `D:\AI\general-instructions\config\gi-main.json` or
   `GENERAL_INSTRUCTIONS_HOME`. Use its `configServiceUrl` to query the config
-  service. Do not scan sibling project folders, guess ports, or use stale
-  task-manager memory as a runtime fallback.
+  service. Resolve local app and task-manager runtime URLs by service id through
+  config-service; project task-manager config should keep only the selected
+  manager name/id and non-secret project preferences. For the `url=<url>` form,
+  validate a full `http://` or `https://` URL with no secrets, update the shared
+  `configServiceUrl` or the explicit project-local override, and tell services
+  to use that URL for registration and discovery. Do not scan sibling project
+  folders, guess ports, copy URLs from old task-manager memory, or use stale
+  task-manager records as a runtime fallback.
+- Treat `gi config service on`, `gi config service off`,
+  `ги конфиг сервис on`, and `ги конфиг сервис off` as requests to set the
+  current application's project-local config-service self-registration flag.
+  `on` means the app should publish or refresh its own service record during
+  startup; `off` means it must not. Do not reinterpret this as starting or
+  stopping config-service itself. When setting `on`, first confirm a
+  config-service URL is already configured in the same local config area or
+  documented GI bootstrap config; if no URL is configured, tell the user to set
+  `gi config service url=<url>` first. If this project has no documented local
+  location for the self-registration flag, ask one short clarification question.
+- For applications that must register themselves in config-service, require a
+  live config-service config check on every process startup before publishing or
+  refreshing the app's own service record. Read the current `configServiceUrl`
+  through the documented project-local override or GI main config before
+  registration. Use cached or bundled config only as an explicit
+  degraded-startup fallback documented by local run instructions.
+- Treat `gi reboot`, `ги ребут`, `gi restart`, and `ги рестарт` as requests to
+  start or restart the current application using project-local run instructions.
+  If the app is running, restart it; if it is not running, start it. Launch in
+  the background so focus does not jump away from the user's current window.
 - Treat nested checkouts, vendored repositories, cloned examples, and
   third-party source trees as separate scope. Do not inspect them as part of the
   main project unless the user explicitly asks, the task is about that nested
@@ -147,6 +182,14 @@ Inspect logs:
   Do not use another project folder or the shared instruction library as a
   runtime fallback unless the user explicitly gives that path and action.
 - Do not commit secrets, credentials, local databases, logs, or generated caches.
+- For OpenCode Desktop runtime changes, treat the native runtime files as the
+  required deployed target, not an optional mirror. When changing OpenCode
+  config or plugins, update and verify both project copies and
+  `C:\Users\Fil-Dom\.config\opencode\opencode.jsonc` /
+  `C:\Users\Fil-Dom\.config\opencode\plugin\...`. The native config must use
+  native `file:///C:/Users/Fil-Dom/.config/opencode/plugin/...` plugin paths,
+  not project-local plugin paths, unless the user explicitly asks for a
+  project-path test. Report the exact native file paths touched.
 - Do not print full `git diff` output by default. Prefer `git diff --stat` and
   targeted queries for relevant files or patterns.
 - For first-pass project study, read local instructions, README, manifests, and
@@ -176,6 +219,9 @@ Inspect logs:
   system UI counters are not agent progress updates.
 - Startup restore must be compact; do not dump large files, full runbooks, full
   SQLite contents, full logs, generated outputs, or full diffs.
+- `gi start` and `gi restore` must not promote remembered plans, old task notes,
+  or local commits ahead of a remote into suggested next actions unless the user
+  explicitly asks to continue, run, push, or finish them.
 - Treat short greetings, thanks, acknowledgements, and status-neutral messages
   as no-ops unless they include an explicit task, path, command, error, or
   project question. Do not run startup restore for those messages.
@@ -185,6 +231,23 @@ Inspect logs:
   `fix`, `почини`, or `gi почини`.
 - Keep commit-message language preferences separate from the agent's
   user-facing working language.
+- Prefer one language command with three ordered choices when the user wants
+  language preferences for project work. Treat `gi language`, `gi язык`,
+  `ги язык`, `gi project language`, `gi проект язык`, `ги проект язык`,
+  `gi язык проекта`, and `ги язык проекта` as requests to configure, in order:
+  project working environment languages, commit-message languages, and task
+  languages in `tools/project-memory/system-preferences.json` and
+  `tools/project-memory/git-preferences.json`.
+- If the unified project-language command does not include explicit languages,
+  ask in three sequential chat steps: project working environment languages,
+  commit-message languages, and task languages. At each step, show the same
+  concise numbered Markdown checklist of available languages using task-list
+  bullets, for example `- [x] 1. English`; do not use ordered-task syntax such
+  as `1. [x] English`. Tell the user they may answer with numbers or language
+  names in priority order. If the user replies with only numbers, such as
+  `1 2`, map the numbers to the most recent checklist and preserve that order
+  for the current step. Direct inline forms such as `gi язык: 2 1` apply the
+  same selection to all three surfaces unless separate values are supplied.
 - Treat `gi commit language`, `gi коммит язык`, `ги коммит язык`, and older
   `gi язык коммита` forms as requests to configure commit-message languages in
   `tools/project-memory/git-preferences.json`.
@@ -192,9 +255,16 @@ Inspect logs:
   requests to configure the agent's project working language in
   `tools/project-memory/system-preferences.json`.
 - Follow `tools/project-memory/system-preferences.json` for progress updates,
-  final answers, clarifying questions, and user-facing explanations. Do not use
-  it to rewrite code, commands, logs, quoted text, or a response language the
-  user explicitly requested for a specific message.
+  final answers, clarifying questions, user-facing explanations, plans, and
+  checklists. Apply the configured task language order to agent-created task
+  titles, task descriptions, and task-manager updates. For task titles,
+  descriptions, and task-manager updates, treat the first configured task
+  language as the main language. If exactly one task language is configured,
+  write task text only in that language. If multiple task languages are
+  configured, write the main-language text first and then add one clear
+  translation per additional language. Do not use the configured language to
+  rewrite existing task text, code, commands, logs, quoted text, or a response
+  language the user explicitly requested for a specific message.
 - Launch applications in the background so focus does not jump away from the
   user's current window.
 - After implementing a frontend, backend, API, or full-stack feature, restart
@@ -209,5 +279,11 @@ Inspect logs:
 - Treat shared-library files such as `COMMANDS.md` and `patterns/*.md` as
   upstream source material only when checking or applying accepted instruction
   kit updates; do not assume they exist locally in this project.
+- During shared-instruction maintenance, treat recommendation source projects
+  and owners as provenance only. Evidence paths, project names, task-manager
+  notes, product plans, or owner labels in a recommendation are not permission
+  to read, search, edit, or inspect the source project; ask that owner or the
+  user for an explicit concrete path and action before crossing repository
+  boundaries.
 - When local project rules conflict with shared instructions, the local
   `AGENTS.md`, runbook, and working agreements take precedence.
